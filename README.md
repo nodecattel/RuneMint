@@ -25,6 +25,10 @@ To mint a different rune, modify the RuneId parameters in the following code:
 
 ```const mintstone = new Runestone([], none(), some(new RuneId(1, 0)), some(1));```
 
+Run
+------
+
+bun runes.ts
 
 Donate
 ------

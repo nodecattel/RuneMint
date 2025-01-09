@@ -8,7 +8,8 @@ Configure
 
 **Fund the Address:** Deposit funds into this address.
 
-**Parameters:**
+
+**Parameters**
 
 **PRIVATE_KEY:** Enter your private key here.
 
@@ -22,6 +23,7 @@ Configure
 The project is set up to mint the rune named NINTONDO with the ID 1:0. You can view this rune at:
 
 https://ord.nintondo.io/rune/NINTONDO
+
 
 **Changing the Rune:**
 

@@ -11,6 +11,8 @@ Configure
 
 **Parameters**
 
+In file runes.ts:
+
 **PRIVATE_KEY:** Enter your private key here.
 
 **FEE_RATE:** Specify the fee rate you're willing to pay for each mint transaction in satoshis per virtual byte (sat/vB).

@@ -1,3 +1,31 @@
+Install
+------
+bun i
+
+Configure
+------
+**Create a P2WPKH (SegWit) Address:** Generate a Pay-to-Witness-Public-Key-Hash address.
+**Fund the Address:** Deposit funds into this address.
+
+**Parameters:**
+
+**PRIVATE_KEY:** Enter your private key here.
+**FEE_RATE:** Specify the fee rate you're willing to pay for each mint transaction in satoshis per virtual byte (sat/vB).
+**MINT_COUNT:** Define how many mint transactions will be batched together. Your initial deposit will be divided into this number of parts, with each part used for one mint transaction.
+
+**Initial Configuration:**
+
+The project is set up to mint the rune named NINTONDO with the ID 1:0. You can view this rune at:
+
+https://ord.nintondo.io/rune/NINTONDO
+
+**Changing the Rune:**
+
+To mint a different rune, modify the RuneId parameters in the following code:
+
+```const mintstone = new Runestone([], none(), some(new RuneId(1, 0)), some(1));```
+
+
 Donate
 ------
 

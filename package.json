@@ -12,10 +12,13 @@
     "belcoinjs-lib": "^0.1.2",
     "bells-secp256k1": "^0.1.1",
     "belpair": "^0.1.3",
+    "chalk": "^5.4.1",
     "dotenv": "^16.4.7",
+    "ora": "^8.1.1",
     "runelib": "^1.0.7"
   },
   "scripts": {
     "etch": "bun run runes.ts"
   }
 }
+

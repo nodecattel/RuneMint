@@ -3,6 +3,8 @@ import ECPairFactory from "belpair";
 import { none, RuneId, Runestone, some } from "runelib";
 import * as ecc from "bells-secp256k1";
 import dotenv from 'dotenv';
+import ora from 'ora';
+import chalk from 'chalk';
 
 // Load environment variables
 dotenv.config();
@@ -11,6 +13,14 @@ dotenv.config();
 if (!process.env.PRIVATE_KEY) {
   throw new Error("PRIVATE_KEY is required in .env file");
 }
+
+// Update the RPC configuration
+const RPC_CONFIG = {
+  url: process.env.RPC_URL || "http://localhost:19918",
+  username: process.env.RPC_USER || "test",
+  password: process.env.RPC_PASS || "test",
+  wallet: process.env.RPC_WALLET || "wallet"
+};
 
 // Configuration from environment variables
 const CONFIG = {
@@ -21,15 +31,15 @@ const CONFIG = {
   feeRate: parseInt(process.env.FEE_RATE || "50"),
   rune: {
     id: parseInt(process.env.RUNE_ID || "1"),
-    symbol: parseInt(process.env.RUNE_SYMBOL || "0"),
+    number: parseInt(process.env.RUNE_NUMBER || "0"),
     amount: parseInt(process.env.RUNE_AMOUNT || "1")
   },
   rpc: {
     useLocal: process.env.USE_LOCAL_RPC === "true",
-    url: process.env.RPC_URL || "http://localhost:19918",
-    username: process.env.RPC_USER || "test",
-    password: process.env.RPC_PASS || "test"
-  }
+    // Removed old rpc configuration
+  },
+  maxRetries: parseInt(process.env.MAX_RETRIES || "3"),
+  useLocal: process.env.USE_LOCAL_RPC === "true"
 };
 
 const ECPair = ECPairFactory(ecc);
@@ -40,11 +50,11 @@ const API_URLS = {
 };
 
 async function callRPC(method: string, params: any[]) {
-  const response = await fetch(CONFIG.rpc.url, {
+  const response = await fetch(`${RPC_CONFIG.url}/wallet/${RPC_CONFIG.wallet}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Basic ' + Buffer.from(`${CONFIG.rpc.username}:${CONFIG.rpc.password}`).toString('base64')
+      'Authorization': 'Basic ' + Buffer.from(`${RPC_CONFIG.username}:${RPC_CONFIG.password}`).toString('base64')
     },
     body: JSON.stringify({
       jsonrpc: "1.0",
@@ -61,11 +71,11 @@ async function callRPC(method: string, params: any[]) {
   return data.result;
 }
 
-async function mint() {
+async function mint(batchSize: number) {
   const mintstone = new Runestone(
     [], 
     none(), 
-    some(new RuneId(CONFIG.rune.id, CONFIG.rune.symbol)), 
+    some(new RuneId(CONFIG.rune.id, CONFIG.rune.number)), 
     some(CONFIG.rune.amount)
   );
 
@@ -81,7 +91,7 @@ async function mint() {
   let utxos = await getUtxos(address as string).then((utxos) =>
     utxos
       ?.filter((utxo) => utxo.value >= minRequired + 1000)
-      .slice(0, CONFIG.mintCount)
+      .slice(0, batchSize)
       .toSorted((a, b) => b.value - a.value)
   );
 
@@ -89,18 +99,18 @@ async function mint() {
     throw new Error("No UTXOs found");
   }
 
-  if (utxos.length < CONFIG.mintCount) {
+  if (utxos.length < batchSize) {
     const available = utxos
       .slice(0, 300)
       .reduce((prev, cur) => cur.value + prev, 0);
 
-    if (available < minRequired * CONFIG.mintCount) {
+    if (available < minRequired * batchSize) {
       throw new Error(
         "Insufficient funds or you need to consolidate UTXOs first"
       );
     }
 
-    const fee = calculateFee(utxos.length, CONFIG.mintCount, CONFIG.feeRate);
+    const fee = calculateFee(utxos.length, batchSize, CONFIG.feeRate);
     const psbt = new Psbt({ network: CONFIG.network });
 
     utxos.slice(0, 300).forEach((utxo) => {
@@ -114,9 +124,9 @@ async function mint() {
       });
     });
 
-    let value = Math.floor((available - fee) / CONFIG.mintCount);
+    let value = Math.floor((available - fee) / batchSize);
 
-    for (let i = 0; i < CONFIG.mintCount; i++) {
+    for (let i = 0; i < batchSize; i++) {
       psbt.addOutput({
         script: baddr.toOutputScript(address as string, CONFIG.network),
         value,
@@ -169,7 +179,7 @@ async function mint() {
   return txs;
 }
 
-export function calculateFee(
+function calculateFee(
   inputCount: number,
   outputCount: number,
   feeRate: number
@@ -188,14 +198,14 @@ export function calculateFee(
   return fee;
 }
 
-export interface Utxo {
+interface Utxo {
   txid: string;
   vout: number;
   value: number;
   hex: string;
 }
 
-export const getUtxos = async (
+const getUtxos = async (
   address: string,
   opts?: {
     amount?: number;
@@ -203,7 +213,7 @@ export const getUtxos = async (
   }
 ): Promise<Utxo[] | undefined> => {
   try {
-    if (CONFIG.rpc.useLocal) {
+    if (CONFIG.useLocal) {
       const result = await callRPC("listunspent", [1, 9999999, [address]]);
       return result.map((utxo: any) => ({
         txid: utxo.txid,
@@ -227,69 +237,110 @@ export const getUtxos = async (
       return await res.json();
     }
   } catch (error) {
-    console.error('Error fetching UTXOs:', error);
+    console.error(chalk.red('Error fetching UTXOs:', error));
     return undefined;
   }
 };
 
 const checkedPushTx = async (txHex: string) => {
   try {
-    if (CONFIG.rpc.useLocal) {
+    if (CONFIG.useLocal) {
       const txid = await callRPC("sendrawtransaction", [txHex]);
       console.log(`Successfully pushed transaction ${txid}`);
       return txid;
     } else {
-      const res = await fetch(
-        API_URLS[CONFIG.network === networks.bellcoin ? "mainnet" : "testnet"] + `/tx`,
-        {
-          method: "POST",
-          body: txHex,
-        }
-      );
+      const response = await fetch(RPC_CONFIG.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic ' + Buffer.from(`${RPC_CONFIG.username}:${RPC_CONFIG.password}`).toString('base64')
+        },
+        body: JSON.stringify({
+          jsonrpc: "1.0",
+          id: "runes",
+          method: "sendrawtransaction",
+          params: [txHex]
+        })
+      });
 
-      if (res.ok) {
-        const txid = await res.text();
-        console.log(`Successfully pushed transaction ${txid}`);
-        return txid;
-      } else {
-        const message = await res.text();
-        if (message.includes("scriptsig-size")) {
-          throw new Error(txHex);
-        }
-        if (
-          message.includes("Transaction already in block chain") ||
-          message.includes("bad-txns-inputs-missingorspent")
-        ) {
+      const data = await response.json();
+      if (data.error) {
+        if (data.error.message.includes("Transaction already in block chain") ||
+            data.error.message.includes("bad-txns-inputs-missingorspent")) {
           return true;
         }
-        console.error(message);
+        console.error(chalk.red(data.error.message));
+        return undefined;
       }
+
+      const txid = data.result;
+      console.log(chalk.green(`Successfully pushed transaction ${txid}`));
+      return txid;
     }
   } catch (error) {
-    console.error('Error sending transaction:', error);
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      if (errorMessage.includes("Transaction already in block chain") ||
+          errorMessage.includes("bad-txns-inputs-missingorspent")) {
+        return true;
+      }
+      console.error(chalk.red(errorMessage));
+    } else {
+      console.error(chalk.red('Error sending transaction:', error));
+    }
     return undefined;
   }
 };
 
-console.log("Starting rune minting...");
-console.log(`Network: ${CONFIG.network === networks.testnet ? "testnet" : "mainnet"}`);
-console.log(`Using ${CONFIG.rpc.useLocal ? "local RPC" : "remote API"}`);
-console.log(`Minting ${CONFIG.mintCount} transactions of ${CONFIG.rune.amount} runes each`);
-console.log(`Total runes to mint: ${CONFIG.mintCount * CONFIG.rune.amount}`);
-
-while (true) {
-  const toPush = await mint();
-
-  while (toPush.length > 0) {
-    const res = await checkedPushTx(toPush[0]);
-
-    if (typeof res === "boolean" && res === true) {
-      toPush.shift();
-    } else if (typeof res === "undefined") {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      continue;
-    } else {
-      toPush.shift();
-    }
+async function main() {
+  console.log(chalk.blue("Starting rune minting..."));
+  console.log(chalk.blue(`Network: ${CONFIG.network === networks.testnet ? "testnet" : "mainnet"}`));
+  console.log(chalk.blue(`Using ${CONFIG.useLocal ? "local RPC" : "remote API"}`));
+  if (CONFIG.useLocal) {
+    console.log(chalk.blue(`RPC URL: ${RPC_CONFIG.url}`));
   }
+  console.log(chalk.blue(`Minting ${CONFIG.mintCount} transactions of ${CONFIG.rune.amount} runes each`));
+  console.log(chalk.blue(`Total runes to mint: ${CONFIG.mintCount * CONFIG.rune.amount}`));
+
+  let successfulMints = 0;
+  let failedMints = 0;
+
+  const spinner = ora(`Minting runes`).start();
+
+  try {
+    const toPush = await mint(CONFIG.mintCount);
+    
+    for (const tx of toPush) {
+      let retries = 0;
+      while (retries < CONFIG.maxRetries) {
+        const res = await checkedPushTx(tx);
+        if (typeof res === "string" || (typeof res === "boolean" && res === true)) {
+          successfulMints++;
+          break;
+        } else {
+          retries++;
+          if (retries < CONFIG.maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
+        }
+      }
+      if (retries === CONFIG.maxRetries) {
+        failedMints++;
+      }
+    }
+
+    spinner.succeed(`Minting completed`);
+  } catch (error) {
+    spinner.fail(`Minting failed`);
+    console.error(chalk.red(`Error during minting:`, error));
+    failedMints = CONFIG.mintCount;
+  }
+
+  console.log("\nMinting process completed!");
+  console.log(`Successful mints: ${successfulMints}`);
+  console.log(chalk.red(`Failed mints: ${failedMints}`));
+  console.log(`Total runes minted: ${successfulMints * CONFIG.rune.amount}`);
 }
+
+main().catch(console.error);
+

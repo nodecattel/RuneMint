@@ -76,7 +76,7 @@ async function mint() {
     network: CONFIG.network,
   });
 
-  const minRequired = calculateFee(1, 2, CONFIG.feeRate);
+  const minRequired = calculateFee(1, 3, CONFIG.feeRate); // Updated for 3 outputs
 
   let utxos = await getUtxos(address as string).then((utxos) =>
     utxos
@@ -118,7 +118,7 @@ async function mint() {
 
     for (let i = 0; i < CONFIG.mintCount; i++) {
       psbt.addOutput({
-        script: baddr.toOutputScript(CONFIG.destinationAddress || address as string, CONFIG.network),
+        script: baddr.toOutputScript(address as string, CONFIG.network),
         value,
       });
     }
@@ -143,14 +143,22 @@ async function mint() {
       },
     });
 
+    // First output: OP_RETURN for rune
     mintPsbt.addOutput({
       script: mintstone.encipher(),
       value: 0,
     });
 
+    // Second output: Minimal amount to destination
     mintPsbt.addOutput({
       address: CONFIG.destinationAddress || address as string,
-      value: utxo.value - minRequired,
+      value: 1000, // Minimal dust amount
+    });
+
+    // Third output: Change back to source address
+    mintPsbt.addOutput({
+      address: address as string,
+      value: utxo.value - minRequired - 1000, // Change minus fees and dust amount
     });
 
     mintPsbt.signAllInputs(keyPair);

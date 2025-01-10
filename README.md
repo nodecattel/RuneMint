@@ -29,15 +29,18 @@ DESTINATION_ADDRESS=""
 ```env
 # Choose between "mainnet" or "testnet"
 NETWORK="mainnet"
-```
+
+# RPC Configuration (for local Bells Core)
+# Set to "true" to use local RPC instead of remote API
+USE_LOCAL_RPC="false"
 
 ### Minting Configuration
-```env
+
 # Number of transactions to create (max 1000)
 MINT_COUNT=200
 
 # Fee rate in sat/vB
-FEE_RATE=2
+FEE_RATE=50
 ```
 
 ### Rune Configuration
@@ -117,7 +120,11 @@ RUNE_AMOUNT=1
 ```bash
 bun runes.ts
 ```
+or
 
+```bash
+bun etch
+```
 ## Security Considerations
 
 1. Never share your private key

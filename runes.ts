@@ -2,34 +2,86 @@ import { networks, payments, Psbt, address as baddr } from "belcoinjs-lib";
 import ECPairFactory from "belpair";
 import { none, RuneId, Runestone, some } from "runelib";
 import * as ecc from "bells-secp256k1";
+import dotenv from 'dotenv';
 
-const NETWORK = networks.bellcoin;
-const PRIVATE_KEY = "";
-const FEE_RATE = 2;
-const MINT_COUNT = 200; // MAX 1000
+// Load environment variables
+dotenv.config();
+
+// Environment variables validation
+if (!process.env.PRIVATE_KEY) {
+  throw new Error("PRIVATE_KEY is required in .env file");
+}
+
+// Configuration from environment variables
+const CONFIG = {
+  network: process.env.NETWORK === "testnet" ? networks.testnet : networks.bellcoin,
+  privateKey: process.env.PRIVATE_KEY,
+  destinationAddress: process.env.DESTINATION_ADDRESS || "",
+  mintCount: parseInt(process.env.MINT_COUNT || "200"),
+  feeRate: parseInt(process.env.FEE_RATE || "50"),
+  rune: {
+    id: parseInt(process.env.RUNE_ID || "1"),
+    symbol: parseInt(process.env.RUNE_SYMBOL || "0"),
+    amount: parseInt(process.env.RUNE_AMOUNT || "1")
+  },
+  rpc: {
+    useLocal: process.env.USE_LOCAL_RPC === "true",
+    url: process.env.RPC_URL || "http://localhost:19918",
+    username: process.env.RPC_USER || "test",
+    password: process.env.RPC_PASS || "test"
+  }
+};
 
 const ECPair = ECPairFactory(ecc);
+
 const API_URLS = {
   testnet: "https://testnet.nintondo.io/electrs",
   mainnet: "https://api.nintondo.io/api",
 };
 
-async function mint() {
-  const mintstone = new Runestone([], none(), some(new RuneId(1, 0)), some(1));
+async function callRPC(method: string, params: any[]) {
+  const response = await fetch(CONFIG.rpc.url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Basic ' + Buffer.from(`${CONFIG.rpc.username}:${CONFIG.rpc.password}`).toString('base64')
+    },
+    body: JSON.stringify({
+      jsonrpc: "1.0",
+      id: "runes",
+      method,
+      params
+    })
+  });
 
-  const keyPair = ECPair.fromWIF(PRIVATE_KEY, networks.bellcoin);
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(data.error.message);
+  }
+  return data.result;
+}
+
+async function mint() {
+  const mintstone = new Runestone(
+    [], 
+    none(), 
+    some(new RuneId(CONFIG.rune.id, CONFIG.rune.symbol)), 
+    some(CONFIG.rune.amount)
+  );
+
+  const keyPair = ECPair.fromWIF(CONFIG.privateKey, CONFIG.network);
 
   const { address } = payments.p2wpkh({
     pubkey: keyPair.publicKey,
-    network: NETWORK,
+    network: CONFIG.network,
   });
 
-  const minRequired = calculateFee(1, 2, FEE_RATE);
+  const minRequired = calculateFee(1, 2, CONFIG.feeRate);
 
   let utxos = await getUtxos(address as string).then((utxos) =>
     utxos
       ?.filter((utxo) => utxo.value >= minRequired + 1000)
-      .slice(0, MINT_COUNT)
+      .slice(0, CONFIG.mintCount)
       .toSorted((a, b) => b.value - a.value)
   );
 
@@ -37,20 +89,19 @@ async function mint() {
     throw new Error("No UTXOs found");
   }
 
-  if (utxos.length < MINT_COUNT) {
+  if (utxos.length < CONFIG.mintCount) {
     const available = utxos
       .slice(0, 300)
       .reduce((prev, cur) => cur.value + prev, 0);
 
-    if (available < minRequired * MINT_COUNT) {
+    if (available < minRequired * CONFIG.mintCount) {
       throw new Error(
         "Insufficient funds or you need to consolidate UTXOs first"
       );
     }
 
-    const fee = calculateFee(utxos.length, MINT_COUNT, FEE_RATE);
-
-    const psbt = new Psbt({ network: NETWORK });
+    const fee = calculateFee(utxos.length, CONFIG.mintCount, CONFIG.feeRate);
+    const psbt = new Psbt({ network: CONFIG.network });
 
     utxos.slice(0, 300).forEach((utxo) => {
       psbt.addInput({
@@ -58,16 +109,16 @@ async function mint() {
         index: utxo.vout,
         witnessUtxo: {
           value: utxo.value,
-          script: baddr.toOutputScript(address as string, NETWORK),
+          script: baddr.toOutputScript(address as string, CONFIG.network),
         },
       });
     });
 
-    let value = Math.floor((available - fee) / MINT_COUNT);
+    let value = Math.floor((available - fee) / CONFIG.mintCount);
 
-    for (let i = 0; i < MINT_COUNT; i++) {
+    for (let i = 0; i < CONFIG.mintCount; i++) {
       psbt.addOutput({
-        script: baddr.toOutputScript(address as string, NETWORK),
+        script: baddr.toOutputScript(CONFIG.destinationAddress || address as string, CONFIG.network),
         value,
       });
     }
@@ -81,14 +132,14 @@ async function mint() {
   let txs = [];
 
   for (const utxo of utxos) {
-    const mintPsbt = new Psbt({ network: NETWORK });
+    const mintPsbt = new Psbt({ network: CONFIG.network });
 
     mintPsbt.addInput({
       hash: utxo.txid,
       index: utxo.vout,
       witnessUtxo: {
         value: utxo.value,
-        script: baddr.toOutputScript(address as string, NETWORK),
+        script: baddr.toOutputScript(address as string, CONFIG.network),
       },
     });
 
@@ -98,7 +149,7 @@ async function mint() {
     });
 
     mintPsbt.addOutput({
-      address: address as string,
+      address: CONFIG.destinationAddress || address as string,
       value: utxo.value - minRequired,
     });
 
@@ -143,54 +194,80 @@ export const getUtxos = async (
     disableHex?: boolean;
   }
 ): Promise<Utxo[] | undefined> => {
-  const params = new URLSearchParams();
-
-  if (typeof opts?.amount === "number") {
-    params.set("amount", opts?.amount.toString());
-  }
-
-  if (!opts?.disableHex) {
-    params.set("hex", "true");
-  }
-
   try {
-    const res = await fetch(
-      API_URLS[NETWORK === networks.testnet ? "testnet" : "mainnet"] +
-        `/address/${address}/utxo?${params.toString()}`
-    );
-    return await res.json();
-  } catch {
+    if (CONFIG.rpc.useLocal) {
+      const result = await callRPC("listunspent", [1, 9999999, [address]]);
+      return result.map((utxo: any) => ({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        value: Math.round(utxo.amount * 100000000),
+        hex: utxo.scriptPubKey
+      }));
+    } else {
+      const params = new URLSearchParams();
+      if (typeof opts?.amount === "number") {
+        params.set("amount", opts?.amount.toString());
+      }
+      if (!opts?.disableHex) {
+        params.set("hex", "true");
+      }
+
+      const res = await fetch(
+        API_URLS[CONFIG.network === networks.testnet ? "testnet" : "mainnet"] +
+          `/address/${address}/utxo?${params.toString()}`
+      );
+      return await res.json();
+    }
+  } catch (error) {
+    console.error('Error fetching UTXOs:', error);
     return undefined;
   }
 };
 
 const checkedPushTx = async (txHex: string) => {
-  const res = await fetch(
-    API_URLS[NETWORK === networks.bellcoin ? "mainnet" : "testnet"] + `/tx`,
-    {
-      method: "POST",
-      body: txHex,
-    }
-  );
+  try {
+    if (CONFIG.rpc.useLocal) {
+      const txid = await callRPC("sendrawtransaction", [txHex]);
+      console.log(`Successfully pushed transaction ${txid}`);
+      return txid;
+    } else {
+      const res = await fetch(
+        API_URLS[CONFIG.network === networks.bellcoin ? "mainnet" : "testnet"] + `/tx`,
+        {
+          method: "POST",
+          body: txHex,
+        }
+      );
 
-  if (res.ok) {
-    const txid = await res.text();
-    console.log(`Successfully pushed transaction ${txid}`);
-    return txid;
-  } else {
-    const message = await res.text();
-    if (message.includes("scriptsig-size")) {
-      throw new Error(txHex);
+      if (res.ok) {
+        const txid = await res.text();
+        console.log(`Successfully pushed transaction ${txid}`);
+        return txid;
+      } else {
+        const message = await res.text();
+        if (message.includes("scriptsig-size")) {
+          throw new Error(txHex);
+        }
+        if (
+          message.includes("Transaction already in block chain") ||
+          message.includes("bad-txns-inputs-missingorspent")
+        ) {
+          return true;
+        }
+        console.error(message);
+      }
     }
-    if (
-      message.includes("Transaction already in block chain") ||
-      message.includes("bad-txns-inputs-missingorspent")
-    ) {
-      return true;
-    }
-    console.error(message);
+  } catch (error) {
+    console.error('Error sending transaction:', error);
+    return undefined;
   }
 };
+
+console.log("Starting rune minting...");
+console.log(`Network: ${CONFIG.network === networks.testnet ? "testnet" : "mainnet"}`);
+console.log(`Using ${CONFIG.rpc.useLocal ? "local RPC" : "remote API"}`);
+console.log(`Minting ${CONFIG.mintCount} transactions of ${CONFIG.rune.amount} runes each`);
+console.log(`Total runes to mint: ${CONFIG.mintCount * CONFIG.rune.amount}`);
 
 while (true) {
   const toPush = await mint();

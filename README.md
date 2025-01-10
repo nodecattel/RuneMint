@@ -1,53 +1,136 @@
-Install
-------
+# Bellscoin RuneMint Configuration Guide
+
+## Basic Setup
+
+### 1. Install Dependencies
+```bash
 bun i
+```
 
-Configure
-------
-**Create a P2WPKH (SegWit) Address:** Generate a Pay-to-Witness-Public-Key-Hash address.
+### 2. Environment Configuration
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
 
-**Fund the Address:** Deposit funds into this address.
+## Configuration Options
 
+### Wallet Configuration
+```env
+# Required: Your private key in WIF format
+PRIVATE_KEY="your_private_key_in_WIF_format"
 
-**Parameters**
+# Optional: Destination address for minted runes
+# If empty, runes will be sent back to the source address
+DESTINATION_ADDRESS=""
+```
 
-In file runes.ts:
+### Network Configuration
+```env
+# Choose between "mainnet" or "testnet"
+NETWORK="mainnet"
+```
 
-**PRIVATE_KEY:** Enter your private key here.
+### Minting Configuration
+```env
+# Number of transactions to create (max 1000)
+MINT_COUNT=200
 
-**FEE_RATE:** Specify the fee rate you're willing to pay for each mint transaction in satoshis per virtual byte (sat/vB).
+# Fee rate in sat/vB
+FEE_RATE=2
+```
 
-**MINT_COUNT:** Define how many mint transactions will be batched together. Your initial deposit will be divided into this number of parts, with each part used for one mint transaction.
+### Rune Configuration
+```env
+# Rune ID (e.g., 1 for NINTONDO)
+RUNE_ID=1
 
+# Rune symbol number
+RUNE_SYMBOL=0
 
-**Initial Configuration:**
+# Amount of runes to mint per transaction
+# e.g., RUNE_AMOUNT=1 means 1 rune per tx
+# If MINT_COUNT=200 and RUNE_AMOUNT=1, total minted = 200 runes
+RUNE_AMOUNT=1
+```
 
-The project is set up to mint the rune named NINTONDO with the ID 1:0. You can view this rune at:
+## Example Configurations
 
-https://ord.nintondo.io/rune/NINTONDO
+### Standard NINTONDO Minting
+```env
+PRIVATE_KEY="your_private_key"
+DESTINATION_ADDRESS=""
+NETWORK="mainnet"
+MINT_COUNT=200
+FEE_RATE=2
+RUNE_ID=1
+RUNE_SYMBOL=0
+RUNE_AMOUNT=1
+```
 
+### High Volume Minting
+```env
+PRIVATE_KEY="your_private_key"
+DESTINATION_ADDRESS="destination_address"
+NETWORK="mainnet"
+MINT_COUNT=1000
+FEE_RATE=2
+RUNE_ID=1
+RUNE_SYMBOL=0
+RUNE_AMOUNT=10  # 10 runes per tx = 10,000 total runes
+```
 
-**Changing the Rune:**
+### Testnet Testing
+```env
+PRIVATE_KEY="your_testnet_private_key"
+DESTINATION_ADDRESS=""
+NETWORK="testnet"
+MINT_COUNT=10
+FEE_RATE=1
+RUNE_ID=1
+RUNE_SYMBOL=0
+RUNE_AMOUNT=1
+```
 
-To mint a different rune, modify the RuneId parameters in the following code:
+## Important Notes
 
-```const mintstone = new Runestone([], none(), some(new RuneId(1, 0)), some(1));```
+1. **Transaction Count**: 
+   - MINT_COUNT determines the number of transactions
+   - Each transaction uses one UTXO
+   - Maximum MINT_COUNT is 1000
 
-Run
-------
+2. **Total Runes**:
+   - Total runes minted = MINT_COUNT × RUNE_AMOUNT
+   - Example: MINT_COUNT=200 and RUNE_AMOUNT=5 will mint 1,000 total runes
 
+3. **UTXOs**:
+   - Each transaction requires one UTXO
+   - Ensure you have enough UTXOs for your MINT_COUNT
+   - If insufficient UTXOs, script will attempt to consolidate
+
+4. **Network Fees**:
+   - FEE_RATE is in satoshis per vByte
+   - Higher rates = faster confirmation
+   - Adjust based on network conditions
+
+## Running the Minter
+```bash
 bun runes.ts
+```
 
-Donate
-------
+## Security Considerations
+
+1. Never share your private key
+2. Keep your `.env` file secure
+3. Add `.env` to your `.gitignore`
+4. Use testnet for testing configurations
+5. Verify addresses before large mints
+
+## Support and Donations
 
 Bellscoin RuneMint is open-source and community funded. 
-
 If you can, please consider donating!
 
-The donation address is
-[bel1qs0k3zuv7achxquxhs3rqjjc93tc3hc6dfmnv2z](https://nintondo.io/explorer/address/bel1qs0k3zuv7achxquxhs3rqjjc93tc3hc6dfmnv2z).
+Donation Address: [bel1qs0k3zuv7achxquxhs3rqjjc93tc3hc6dfmnv2z](https://nintondo.io/explorer/address/bel1qs0k3zuv7achxquxhs3rqjjc93tc3hc6dfmnv2z)
 
 Bellscoin received will go towards funding maintenance and development of Bells ecosystem.
-
-Thank you for donating!

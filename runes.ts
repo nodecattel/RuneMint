@@ -5,6 +5,7 @@ import * as ecc from "bells-secp256k1";
 import dotenv from 'dotenv';
 import ora from 'ora';
 import chalk from 'chalk';
+import { getFeeEstimate } from './fee-utils';
 
 // Load environment variables
 dotenv.config();
@@ -17,8 +18,8 @@ if (!process.env.PRIVATE_KEY) {
 // Update the RPC configuration
 const RPC_CONFIG = {
   url: process.env.RPC_URL || "http://localhost:19918",
-  username: process.env.RPC_USER || "test",
-  password: process.env.RPC_PASS || "test",
+  username: process.env.RPC_USER || "nodecattel",
+  password: process.env.RPC_PASS || "nodecatteL",
   wallet: process.env.RPC_WALLET || "wallet"
 };
 
@@ -27,19 +28,19 @@ const CONFIG = {
   network: process.env.NETWORK === "testnet" ? networks.testnet : networks.bellcoin,
   privateKey: process.env.PRIVATE_KEY,
   destinationAddress: process.env.DESTINATION_ADDRESS || "",
-  mintCount: parseInt(process.env.MINT_COUNT || "200"),
-  feeRate: parseInt(process.env.FEE_RATE || "50"),
+  mintCount: parseInt(process.env.MINT_COUNT || "1000"),
+  feeRate: parseInt(process.env.FEE_RATE || "135"),
   rune: {
-    id: parseInt(process.env.RUNE_ID || "1"),
-    number: parseInt(process.env.RUNE_NUMBER || "0"),
-    amount: parseInt(process.env.RUNE_AMOUNT || "1")
+    id: parseInt(process.env.RUNE_ID || "351349"),
+    number: parseInt(process.env.RUNE_NUMBER || "1"),
+    amount: parseInt(process.env.RUNE_AMOUNT || "1000")
   },
   rpc: {
     useLocal: process.env.USE_LOCAL_RPC === "true",
-    // Removed old rpc configuration
   },
   maxRetries: parseInt(process.env.MAX_RETRIES || "3"),
-  useLocal: process.env.USE_LOCAL_RPC === "true"
+  useLocal: process.env.USE_LOCAL_RPC === "true",
+  preferredConfirmation: parseInt(process.env.PREFERRED_CONFIRMATION || "3"),
 };
 
 const ECPair = ECPairFactory(ecc);
@@ -297,7 +298,8 @@ function printMintInfo() {
   console.log(chalk.yellow(`Rune ID: ${CONFIG.rune.id}`));
   console.log(chalk.yellow(`Rune Number: ${CONFIG.rune.number}`));
   console.log(chalk.yellow(`Rune Amount in Config: ${CONFIG.rune.amount}`));
-  console.log(chalk.yellow(`Fee Rate: ${CONFIG.feeRate} sat/vB`));
+  console.log(chalk.yellow(`Original Fee Rate: ${Math.floor(CONFIG.feeRate / 1.5)} sat/vB`));
+  console.log(chalk.yellow(`Buffered Fee Rate (50% increase): ${CONFIG.feeRate} sat/vB`));
   console.log(chalk.yellow("\nActual Runestone creation:"));
   console.log(chalk.yellow(`new Runestone([], none(), some(new RuneId(${CONFIG.rune.id}, ${CONFIG.rune.number})), some(1))`));
 }
@@ -306,16 +308,21 @@ async function main() {
   console.log(chalk.blue("Starting rune minting..."));
   console.log(chalk.blue(`Network: ${CONFIG.network === networks.testnet ? "testnet" : "mainnet"}`));
   console.log(chalk.blue(`Using ${CONFIG.useLocal ? "local RPC" : "remote API"}`));
-  if (CONFIG.useLocal) {
-    console.log(chalk.blue(`RPC URL: ${RPC_CONFIG.url}`));
-  }
+  
+  // Fetch dynamic fee rate
+  const originalFeeRate = await getFeeEstimate(CONFIG.preferredConfirmation);
+  const bufferedFeeRate = Math.ceil(originalFeeRate * 1.5);
+  CONFIG.feeRate = bufferedFeeRate;
+  
+  console.log(chalk.blue(`Original fee rate: ${originalFeeRate} sat/vB`));
+  console.log(chalk.blue(`Buffered fee rate (50% increase): ${bufferedFeeRate} sat/vB`));
   console.log(chalk.blue(`Minting ${CONFIG.mintCount} transactions of ${CONFIG.rune.amount} runes each`));
   console.log(chalk.blue(`Total runes to mint: ${CONFIG.mintCount * CONFIG.rune.amount}`));
 
   printMintInfo();
 
-  console.log(chalk.cyan("\nStarting in 3 seconds..."));
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  console.log(chalk.cyan("\nStarting in 10 seconds..."));
+  await new Promise(resolve => setTimeout(resolve, 10000));
 
   let successfulMints = 0;
   let failedMints = 0;

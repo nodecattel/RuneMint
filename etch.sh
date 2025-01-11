@@ -24,6 +24,6 @@ while true; do
         echo "-------------------------------------------"
     fi
     
-    # 10 seconds delay to prevent overwhelming the system
-    sleep 10
+    # 30 seconds delay to prevent overwhelming the system
+    sleep 30
 done

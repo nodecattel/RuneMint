@@ -76,7 +76,7 @@ async function mint(batchSize: number) {
     [], 
     none(), 
     some(new RuneId(CONFIG.rune.id, CONFIG.rune.number)), 
-    some(CONFIG.rune.amount)
+    some(1)
   );
 
   const keyPair = ECPair.fromWIF(CONFIG.privateKey, CONFIG.network);
@@ -292,6 +292,16 @@ const checkedPushTx = async (txHex: string) => {
   }
 };
 
+function printMintInfo() {
+  console.log(chalk.yellow("\nRunestone Configuration:"));
+  console.log(chalk.yellow(`Rune ID: ${CONFIG.rune.id}`));
+  console.log(chalk.yellow(`Rune Number: ${CONFIG.rune.number}`));
+  console.log(chalk.yellow(`Rune Amount in Config: ${CONFIG.rune.amount}`));
+  console.log(chalk.yellow(`Fee Rate: ${CONFIG.feeRate} sat/vB`));
+  console.log(chalk.yellow("\nActual Runestone creation:"));
+  console.log(chalk.yellow(`new Runestone([], none(), some(new RuneId(${CONFIG.rune.id}, ${CONFIG.rune.number})), some(1))`));
+}
+
 async function main() {
   console.log(chalk.blue("Starting rune minting..."));
   console.log(chalk.blue(`Network: ${CONFIG.network === networks.testnet ? "testnet" : "mainnet"}`));
@@ -301,6 +311,11 @@ async function main() {
   }
   console.log(chalk.blue(`Minting ${CONFIG.mintCount} transactions of ${CONFIG.rune.amount} runes each`));
   console.log(chalk.blue(`Total runes to mint: ${CONFIG.mintCount * CONFIG.rune.amount}`));
+
+  printMintInfo();
+
+  console.log(chalk.cyan("\nStarting in 3 seconds..."));
+  await new Promise(resolve => setTimeout(resolve, 3000));
 
   let successfulMints = 0;
   let failedMints = 0;

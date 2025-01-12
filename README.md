@@ -45,11 +45,11 @@ FEE_RATE=50
 
 ### Rune Configuration
 ```env
-# Rune ID (e.g., 1 for NINTONDO)
+# Rune ID (e.g., 1 for NINTONDO, 355895 for BELL•SEX•MACHINE))
 RUNE_ID=1
 
-# Rune symbol number
-RUNE_SYMBOL=0
+# Rune symbol number (e.g., 0 for NINTONDO, 1 for BELL•SEX•MACHINE)
+RUNE_NUMBER=0
 
 # Amount of runes to mint per transaction
 # e.g., RUNE_AMOUNT=1 means 1 rune per tx

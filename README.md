@@ -123,7 +123,7 @@ bun runes.ts
 or
 
 ```bash
-bun etch
+bun mint
 ```
 ## Security Considerations
 

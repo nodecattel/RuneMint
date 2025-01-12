@@ -65,22 +65,22 @@ PRIVATE_KEY="your_private_key"
 DESTINATION_ADDRESS=""
 NETWORK="mainnet"
 MINT_COUNT=200
-FEE_RATE=2
+FEE_RATE=50
 RUNE_ID=1
 RUNE_NUMBER=0
 RUNE_AMOUNT=1
 ```
 
-### High Volume Minting
+### BELL•SEX•MACHINE Minting
 ```env
 PRIVATE_KEY="your_private_key"
 DESTINATION_ADDRESS="destination_address"
 NETWORK="mainnet"
-MINT_COUNT=1000
-FEE_RATE=2
-RUNE_ID=1
-RUNE_NUMBER=0
-RUNE_AMOUNT=10  # 10 runes per tx = 10,000 total runes
+MINT_COUNT=200
+FEE_RATE=50
+RUNE_ID=355895
+RUNE_NUMBER=1
+RUNE_AMOUNT=69  # 69 runes per tx = 13,800 total runes
 ```
 
 ### Testnet Testing
